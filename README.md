@@ -2,7 +2,24 @@
 
 Antigravity is a high-performance, mobile-first scheduling and efficiency engine designed to align daily activities with biological energy levels (circadian rhythms) and neural states. It features a custom temporal engine with mechanical haptic feedback and real-time Firestore synchronization.
 
-![Header Image](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/header.png)
+![Dashboard Main](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/1.png)
+
+## 📸 Visual Tour
+
+| Dashboard Overview | Circadian Alignment | Activity Management |
+|:---:|:---:|:---:|
+| ![1](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/1.png) | ![2](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/2.png) | ![3](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/3.png) |
+
+| Deep Work Analysis | Neural Retro-spec | Mechanical Feedback |
+|:---:|:---:|:---:|
+| ![4](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/4.png) | ![5](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/5.png) | ![6](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/6.png) |
+
+| Mobile Optimization | Mastery Projections | System Settings |
+|:---:|:---:|:---:|
+| ![7](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/7.png) | ![8](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/8.png) | ![9](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/9.png) |
+
+> *Full system capability including cross-platform synchronization (Image 10).*
+> ![10](https://github.com/arun-kalita/aura-velocity-calendar-app/raw/main/public/10.png)
 
 ## 🚀 Key Features
 
