@@ -122,7 +122,7 @@ export function EntryModal({ isOpen, onClose, log, isNew }) {
     }
   }, [formData.activityName, formData.subcategory, currentActivity, isOpen]);
 
-  const handleSave = (choice) => {
+  const handleSave = async (choice) => {
     // Allow fluid auto-trimming via AppContext enforceExclusivity
 
     if (isNew) {

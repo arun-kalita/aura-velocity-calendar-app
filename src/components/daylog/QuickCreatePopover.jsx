@@ -41,7 +41,7 @@ export function QuickCreatePopover({ data, onClose, onMoreOptions }) {
   const currentActivity = activities.find(a => a.name === formData.activityName);
   const activityColor = currentActivity?.baseColor || '#555';
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (formData.startTime && formData.endTime && formData.date) {
       const conflict = checkOverlap(formData.date, formData.startTime, formData.endTime, null, logs);
       if (conflict) {
