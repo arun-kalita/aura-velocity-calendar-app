@@ -883,7 +883,10 @@ export function AppProvider({ children }) {
       const lMillis = l.updatedAt?.toMillis?.() || (l.updatedAt instanceof Date ? l.updatedAt.getTime() : 0);
       const eMillis = existing?.updatedAt?.toMillis?.() || (existing?.updatedAt instanceof Date ? existing.updatedAt.getTime() : 0);
       
-      const isNewer = !existing || lMillis > eMillis;
+      // Safety: If the existing local log was updated very recently (last 10s), 
+      // treat it as newer even if the server version has a slightly different timestamp.
+      const isVeryRecent = (Date.now() - eMillis) < 10000;
+      const isNewer = !existing || (!isVeryRecent && lMillis > eMillis);
       
       if (isNewer) {
         uniqueById.set(l.id, { ...l });
@@ -891,9 +894,13 @@ export function AppProvider({ children }) {
     });
 
     // Cleanup: Remove local logs that were already synced but are now missing from Firestore (Deletions)
+    const now = Date.now();
     for (const [id, log] of uniqueById.entries()) {
+      const logMillis = log.updatedAt?.toMillis?.() || (log.updatedAt instanceof Date ? log.updatedAt.getTime() : 0);
+      const isVeryRecent = (now - logMillis) < 10000;
+      
       const isSynced = log.updatedAt?.toMillis || (log.updatedAt && !(log.updatedAt instanceof Date));
-      if (isSynced && !firestoreIds.has(id)) {
+      if (isSynced && !firestoreIds.has(id) && !isVeryRecent) {
         uniqueById.delete(id);
       }
     }
@@ -1583,19 +1590,20 @@ export function AppProvider({ children }) {
 
     if (user) {
       if (!log.recurringType || log.recurringType === 'none') {
+        let affected = [];
         setLogs(prev => {
           const { finalLogs, affectedLogs } = processTemporalState(newLog, prev);
-          
-          // Sync all affected logs
-          const batch = writeBatch(db);
-          affectedLogs.forEach(l => {
-            const lRef = doc(db, 'users', user.uid, 'logs', l.id);
-            batch.set(lRef, { ...l, updatedAt: serverTimestamp() }, { merge: true });
-          });
-          batch.commit().catch(e => console.error("Sync error:", e));
-          
+          affected = affectedLogs;
           return finalLogs;
         });
+        
+        // Sync all affected logs
+        const batch = writeBatch(db);
+        affected.forEach(l => {
+          const lRef = doc(db, 'users', user.uid, 'logs', l.id);
+          batch.set(lRef, { ...l, updatedAt: serverTimestamp() }, { merge: true });
+        });
+        await batch.commit().catch(e => console.error("Sync error:", e));
       } else {
         const batch = writeBatch(db);
         const groupId = Math.random().toString(36).substr(2, 9);
@@ -1667,26 +1675,25 @@ export function AppProvider({ children }) {
     setPastLogs(h => [...h, logs].slice(-50));
     setFutureLogs([]);
 
+    let affected = [];
     setLogs(prev => {
       const existing = prev.find(l => l.id === id);
       if (!existing) return prev;
 
-      // Use a local Date for the optimistic state so healLogs can compare it correctly.
-      // Firestore will still use serverTimestamp() for the actual write.
       const proposed = { ...existing, ...updates, updatedAt: new Date() };
       const { finalLogs, affectedLogs } = processTemporalState(proposed, prev);
-
-      if (user) {
-        const batch = writeBatch(db);
-        affectedLogs.forEach(l => {
-          const lRef = doc(db, 'users', user.uid, 'logs', l.id);
-          batch.set(lRef, { ...l, updatedAt: serverTimestamp() }, { merge: true });
-        });
-        batch.commit().catch(e => console.error("Sync error:", e));
-      }
-
+      affected = affectedLogs;
       return finalLogs;
     });
+
+    if (user && affected.length > 0) {
+      const batch = writeBatch(db);
+      affected.forEach(l => {
+        const lRef = doc(db, 'users', user.uid, 'logs', l.id);
+        batch.set(lRef, { ...l, updatedAt: serverTimestamp() }, { merge: true });
+      });
+      await batch.commit().catch(e => console.error("Sync error:", e));
+    }
   };
   const updateLogSeries = async (groupId, updates) => {
     if (user) {
