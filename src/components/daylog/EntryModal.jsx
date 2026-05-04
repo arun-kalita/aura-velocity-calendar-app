@@ -126,7 +126,7 @@ export function EntryModal({ isOpen, onClose, log, isNew }) {
     // Allow fluid auto-trimming via AppContext enforceExclusivity
 
     if (isNew) {
-      addLog({ ...formData, id: Math.random().toString(36).substr(2, 9) });
+      await addLog({ ...formData, id: Math.random().toString(36).substr(2, 9) });
     } else {
       const wasRecurring = !!log.recurringGroupId;
       const isNowRecurring = formData.recurringType !== 'none';
@@ -138,23 +138,23 @@ export function EntryModal({ isOpen, onClose, log, isNew }) {
         }
         if (choice === 'series') {
           if (isNowRecurring) {
-            updateLogSeries(log.recurringGroupId, formData);
+            await updateLogSeries(log.recurringGroupId, formData);
           } else {
             // Updated series to no longer recur
-            updateLogSeries(log.recurringGroupId, { ...formData, recurringGroupId: null, isRecurring: false });
+            await updateLogSeries(log.recurringGroupId, { ...formData, recurringGroupId: null, isRecurring: false });
           }
         } else {
           // Edited a single entry of a series
-          updateLog(log.id, { ...formData, recurringGroupId: null, isRecurring: false });
+          await updateLog(log.id, { ...formData, recurringGroupId: null, isRecurring: false });
         }
       } else {
         // Was single
         if (isNowRecurring) {
           // Changed to recurring: delete single and create new series
-          deleteLog(log.id);
-          addLog(formData);
+          await deleteLog(log.id);
+          await addLog(formData);
         } else {
-          updateLog(log.id, { ...formData, recurringGroupId: null, isRecurring: false });
+          await updateLog(log.id, { ...formData, recurringGroupId: null, isRecurring: false });
         }
       }
     }

@@ -1590,16 +1590,12 @@ export function AppProvider({ children }) {
 
     if (user) {
       if (!log.recurringType || log.recurringType === 'none') {
-        let affected = [];
-        setLogs(prev => {
-          const { finalLogs, affectedLogs } = processTemporalState(newLog, prev);
-          affected = affectedLogs;
-          return finalLogs;
-        });
+        const { finalLogs, affectedLogs } = processTemporalState(newLog, logs);
+        setLogs(finalLogs);
         
         // Sync all affected logs
         const batch = writeBatch(db);
-        affected.forEach(l => {
+        affectedLogs.forEach(l => {
           const lRef = doc(db, 'users', user.uid, 'logs', l.id);
           batch.set(lRef, { ...l, updatedAt: serverTimestamp() }, { merge: true });
         });
@@ -1675,20 +1671,16 @@ export function AppProvider({ children }) {
     setPastLogs(h => [...h, logs].slice(-50));
     setFutureLogs([]);
 
-    let affected = [];
-    setLogs(prev => {
-      const existing = prev.find(l => l.id === id);
-      if (!existing) return prev;
+    const existing = logs.find(l => l.id === id);
+    if (!existing) return;
 
-      const proposed = { ...existing, ...updates, updatedAt: new Date() };
-      const { finalLogs, affectedLogs } = processTemporalState(proposed, prev);
-      affected = affectedLogs;
-      return finalLogs;
-    });
+    const proposed = { ...existing, ...updates, updatedAt: new Date() };
+    const { finalLogs, affectedLogs } = processTemporalState(proposed, logs);
+    setLogs(finalLogs);
 
-    if (user && affected.length > 0) {
+    if (user && affectedLogs.length > 0) {
       const batch = writeBatch(db);
-      affected.forEach(l => {
+      affectedLogs.forEach(l => {
         const lRef = doc(db, 'users', user.uid, 'logs', l.id);
         batch.set(lRef, { ...l, updatedAt: serverTimestamp() }, { merge: true });
       });

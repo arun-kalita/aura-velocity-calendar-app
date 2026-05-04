@@ -12,7 +12,7 @@ import {
 } from '../../utils/dateHelpers';
 import { mechanicalAudio } from '../../utils/mechanicalAudio';
 
-export const DayColumn = memo(function DayColumn({
+export function DayColumn({
   day,
   onEditLog,
   onNewLog,
@@ -282,4 +282,4 @@ export const DayColumn = memo(function DayColumn({
       </div>
     </motion.div>
   );
-});
+}

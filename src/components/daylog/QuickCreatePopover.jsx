@@ -50,7 +50,7 @@ export function QuickCreatePopover({ data, onClose, onMoreOptions }) {
       }
     }
 
-    addLog({
+    await addLog({
       ...formData,
       id: Math.random().toString(36).substr(2, 9),
       notes: '',
