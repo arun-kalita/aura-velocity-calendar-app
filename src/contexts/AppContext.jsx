@@ -52,10 +52,10 @@ export function AppProvider({ children }) {
             const seed = INITIAL_ACTIVITIES.find(s => s.name === act.name);
             if (!seed) return act;
             
-            // Migrate Tool color from Yellow to Teal
-            if (act.name === 'Tool' && act.baseColor === '#eab308') {
-              act.baseColor = '#0d9488';
-              act.lightColor = '#2dd4bf';
+            // Migrate Tool color to high-contrast Cyan
+            if (act.name === 'Tool') {
+              act.baseColor = '#06b6d4';
+              act.lightColor = '#67e8f9';
             }
             
             // Migrate Food color from Amber to Orange
@@ -114,6 +114,7 @@ export function AppProvider({ children }) {
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const recentlyDeleted = useRef(new Set());
 
   // Water Intake State
   const [waterIntake, setWaterIntake] = useState(() => {
@@ -570,6 +571,7 @@ export function AppProvider({ children }) {
 
     if (user) {
       try {
+        recentlyDeleted.current.add(id);
         const batch = writeBatch(db);
         batch.delete(doc(db, 'users', user.uid, 'logs', id));
         
@@ -580,7 +582,12 @@ export function AppProvider({ children }) {
         });
 
         await batch.commit();
+        // Clear from recentlyDeleted after a safe delay (sync window)
+        setTimeout(() => {
+          recentlyDeleted.current.delete(id);
+        }, 5000);
       } catch (e) {
+        recentlyDeleted.current.delete(id);
         console.error("Delete failed:", e);
         showToast("Delete failed. Syncing...", "error");
       }
@@ -844,25 +851,61 @@ export function AppProvider({ children }) {
     }).filter(Boolean);
   }, []);
 
-  const healLogs = useCallback((rawLogs) => {
-    if (!rawLogs || rawLogs.length === 0) return [];
+
+  const healLogs = useCallback((firestoreLogs, localLogs = []) => {
+    if (!firestoreLogs) return localLogs;
 
     const uniqueById = new Map();
-    const seenContent = new Set();
+    // Pre-fill with local logs to ensure we don't lose optimistic updates
+    localLogs.forEach(l => {
+      if (!recentlyDeleted.current.has(l.id)) {
+        uniqueById.set(l.id, l);
+      }
+    });
 
-    rawLogs.forEach(l => {
+    const seenContent = new Set();
+    const firestoreIds = new Set(firestoreLogs.map(l => l.id));
+
+    firestoreLogs.forEach(l => {
       if (!l.id || !l.date || !l.startTime) return;
+      if (recentlyDeleted.current.has(l.id)) return;
       
       const contentKey = `${l.date}-${l.startTime}-${l.endTime || l.startTime}-${l.activityName}`;
       const existing = uniqueById.get(l.id);
-      const isNewer = !existing || (l.updatedAt?.toMillis?.() > (existing.updatedAt?.toMillis?.() || 0));
-      const isDuplicateContent = seenContent.has(contentKey);
+      
+      // Comparison logic: 
+      // 1. If Firestore has it, and local doesn't -> New from server
+      // 2. If both have it -> Take the one with the newer updatedAt
+      // 3. If local has it and Firestore doesn't -> 
+      //    - If local has a server timestamp, it's been deleted on server -> REMOVE
+      //    - If local is a Date object, it's a pending local write -> KEEP
+      
+      const lMillis = l.updatedAt?.toMillis?.() || (l.updatedAt instanceof Date ? l.updatedAt.getTime() : 0);
+      const eMillis = existing?.updatedAt?.toMillis?.() || (existing?.updatedAt instanceof Date ? existing.updatedAt.getTime() : 0);
+      
+      const isNewer = !existing || lMillis > eMillis;
       
       if (isNewer) {
-        if (!isDuplicateContent) {
-          uniqueById.set(l.id, { ...l });
-          seenContent.add(contentKey);
-        }
+        uniqueById.set(l.id, { ...l });
+      }
+    });
+
+    // Cleanup: Remove local logs that were already synced but are now missing from Firestore (Deletions)
+    for (const [id, log] of uniqueById.entries()) {
+      const isSynced = log.updatedAt?.toMillis || (log.updatedAt && !(log.updatedAt instanceof Date));
+      if (isSynced && !firestoreIds.has(id)) {
+        uniqueById.delete(id);
+      }
+    }
+
+    // Final pass for temporal consistency and content deduplication
+    const merged = Array.from(uniqueById.values());
+    const finalUnique = [];
+    merged.sort((a, b) => timeStrToMinutes(a.startTime) - timeStrToMinutes(b.startTime)).forEach(l => {
+      const contentKey = `${l.date}-${l.startTime}-${l.endTime || l.startTime}-${l.activityName}`;
+      if (!seenContent.has(contentKey)) {
+        finalUnique.push(l);
+        seenContent.add(contentKey);
       }
     });
 
@@ -1055,11 +1098,11 @@ export function AppProvider({ children }) {
 
     const unsubLogs = onSnapshot(collection(db, 'users', user.uid, 'logs'), (snapshot) => {
       const firestoreLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const healed = healLogs(firestoreLogs);
       
-      // If healing changed the count or data significantly, we should ideally sync back
-      // but for now we just update the UI state to be clean.
-      setLogs(healed);
+      setLogs(prev => {
+        const healed = healLogs(firestoreLogs, prev);
+        return healed;
+      });
     });
 
     const unsubActivities = onSnapshot(collection(db, 'users', user.uid, 'activities'), (snapshot) => {
@@ -1531,13 +1574,14 @@ export function AppProvider({ children }) {
 
   const addLog = async (log) => {
     const logId = log.id || Math.random().toString(36).substr(2, 9);
-    const newLog = { ...log, id: logId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    // Use a local Date for the optimistic state so healLogs can compare it correctly.
+    // Firestore will still use serverTimestamp() for the actual write.
+    const newLog = { ...log, id: logId, createdAt: new Date(), updatedAt: new Date() };
 
     setPastLogs(h => [...h, logs].slice(-50));
     setFutureLogs([]);
 
     if (user) {
-      const batch = writeBatch(db);
       if (!log.recurringType || log.recurringType === 'none') {
         setLogs(prev => {
           const { finalLogs, affectedLogs } = processTemporalState(newLog, prev);
@@ -1548,11 +1592,12 @@ export function AppProvider({ children }) {
             const lRef = doc(db, 'users', user.uid, 'logs', l.id);
             batch.set(lRef, { ...l, updatedAt: serverTimestamp() }, { merge: true });
           });
-          batch.commit();
+          batch.commit().catch(e => console.error("Sync error:", e));
           
           return finalLogs;
         });
       } else {
+        const batch = writeBatch(db);
         const groupId = Math.random().toString(36).substr(2, 9);
         const [year, month, day] = log.date.split('-').map(Number);
         const startDate = new Date(year, month - 1, day);
@@ -1584,8 +1629,8 @@ export function AppProvider({ children }) {
         });
 
         setLogs(localBatch);
+        await batch.commit();
       }
-      await batch.commit();
     } else {
       // Local logic
       if (!log.recurringType || log.recurringType === 'none') {
@@ -1626,7 +1671,9 @@ export function AppProvider({ children }) {
       const existing = prev.find(l => l.id === id);
       if (!existing) return prev;
 
-      const proposed = { ...existing, ...updates, updatedAt: serverTimestamp() };
+      // Use a local Date for the optimistic state so healLogs can compare it correctly.
+      // Firestore will still use serverTimestamp() for the actual write.
+      const proposed = { ...existing, ...updates, updatedAt: new Date() };
       const { finalLogs, affectedLogs } = processTemporalState(proposed, prev);
 
       if (user) {

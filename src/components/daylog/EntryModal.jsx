@@ -412,8 +412,8 @@ export function EntryModal({ isOpen, onClose, log, isNew }) {
             </div>
           </div>
 
-          {/* Regret Rating (Only for existing entries that are in the past) */}
-          {!isNew && new Date(formData.date + 'T' + formData.startTime) < new Date() && (
+          {/* Regret Rating (Only for entries that are in the past) */}
+          {new Date(formData.date + 'T' + formData.startTime) < new Date() && (
             <div className={clsx(rowCls, "pt-2")}>
               <Smile className={clsx(iconCls, formData.regretRating ? "text-emerald-500" : "")} />
               <div className="flex-1">
@@ -432,7 +432,9 @@ export function EntryModal({ isOpen, onClose, log, isNew }) {
                         key={val}
                         onClick={() => {
                           setFormData({ ...formData, regretRating: val });
-                          updateLog(log.id, { regretRating: val });
+                          if (!isNew && log?.id) {
+                            updateLog(log.id, { regretRating: val });
+                          }
                         }}
                         className={clsx(
                           "flex-1 py-1.5 flex flex-col items-center gap-0.5 rounded-lg transition-all",

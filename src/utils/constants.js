@@ -68,8 +68,8 @@ export const INITIAL_ACTIVITIES = [
   },
   {
     name: 'Tool',
-    baseColor: '#115e59',
-    lightColor: '#2dd4bf',
+    baseColor: '#06b6d4',
+    lightColor: '#67e8f9',
     defaultReferenceLink: null,
     subcategories: [
       { name: 'Python', defaultReferenceLink: null },
